@@ -252,14 +252,12 @@ function RunDetail({
       jobName: { color: theme.colors.foreground, fontSize: 14, flex: 1 },
       stepRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 16 },
       stepName: { color: theme.colors.foregroundMuted, fontSize: 12, flex: 1 },
-      logBox: {
-        borderRadius: 6,
-        borderWidth: 1,
-        borderColor: border,
-        backgroundColor: surface1,
-        maxHeight: 320,
+      logSection: {
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: border,
+        gap: 4,
       },
-      logBoxContent: { padding: 10 },
       logText: {
         color: theme.colors.foreground,
         fontSize: 11,
@@ -432,24 +430,22 @@ function RunDetail({
                   </View>
                 ))}
                 {logOpen && (
-                  <ScrollView style={styles.logBox} nestedScrollEnabled>
-                    <View style={styles.logBoxContent}>
-                      {logQuery.isPending && <Text style={styles.muted}>Loading log…</Text>}
-                      {logQuery.data && !logQuery.data.ok && (
-                        <Text style={styles.danger}>{logQuery.data.message}</Text>
-                      )}
-                      {logQuery.data?.ok && (
-                        <>
-                          {logQuery.data.truncated && (
-                            <Text style={styles.metaText}>
-                              Log truncated to the last 512 KiB.{"\n"}
-                            </Text>
-                          )}
-                          <Text style={styles.logText}>{logQuery.data.log}</Text>
-                        </>
-                      )}
-                    </View>
-                  </ScrollView>
+                  <View style={styles.logSection}>
+                    {logQuery.isPending && <Text style={styles.muted}>Loading log…</Text>}
+                    {logQuery.data && !logQuery.data.ok && (
+                      <Text style={styles.danger}>{logQuery.data.message}</Text>
+                    )}
+                    {logQuery.data?.ok && (
+                      <>
+                        {logQuery.data.truncated && (
+                          <Text style={styles.metaText}>
+                            Log truncated to the last 512 KiB.{"\n"}
+                          </Text>
+                        )}
+                        <Text style={styles.logText}>{logQuery.data.log}</Text>
+                      </>
+                    )}
+                  </View>
                 )}
               </View>
             );
