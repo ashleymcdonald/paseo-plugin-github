@@ -37,19 +37,18 @@ The dropdown scopes every tab; "All projects" aggregates across repos.
   - The new workspace is labeled (`labels: { github-issue: "<n>" }`) so the
     Board tab can correlate workspaces ↔ issues.
 
-### Board tab
+### Board tab — shipped as its own sidebar surface
 
-- Kanban over the project's issues **and** its Paseo workspaces.
-- Columns from GitHub Projects v2 (`gh api graphql`) when the repo has a
-  linked project; otherwise label-fallback columns (`status:*` labels) with
-  a fixed default set (Todo / In Progress / Done).
-- Cards: issues (number, title, labels) and linked workspaces (agent status
-  from `useWorkspace` snapshots, via the `github-issue` label correlation).
-- Move card → Projects v2 mutation, or label swap in fallback mode.
-  Drag-drop is a stretch goal on web; baseline is a "Move to → column"
-  action per card. Optimistic update, rollback on RPC failure.
-- Clicking a workspace card opens that workspace in Paseo; clicking an issue
-  card opens the issue detail.
+- Own sidebar item ("Board", `SquareKanban`) with its own project filter
+  dropdown; removed from the GitHub surface's tab strip.
+- **Label mode shipped**: columns from `status:*` labels (natural rank:
+  backlog/todo/pending/in progress/in review/done, then alphabetical),
+  "No status" inbox always present. Move via card menu; missing labels are
+  auto-created on the repo (`gh label create` + retry).
+- Workspace correlation shipped as **agent chips** on issue cards
+  (agents labeled `github-issue` → workspace → project).
+- Follow-ups: GitHub Projects v2 columns/mutations (GraphQL), drag-drop,
+  workspace cards as first-class cards.
 
 ### Pull Requests tab
 
