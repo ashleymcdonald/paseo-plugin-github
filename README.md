@@ -12,10 +12,18 @@ leaving your agent workspace.
 - **Issues** — browse open/closed issues across repos, read the full
   thread, comment, close/reopen, and **start a dedicated agent workspace on
   an issue** in one click (worktree + branch + issue context as the prompt).
-- **Actions** — recent workflow runs across repos, job/step breakdown, log
-  viewing (tail-capped for large logs), rerun failed jobs, cancel running
-  workflows.
-- **Pull Requests** / **Board** — in progress.
+- **Pull Requests** — open/closed/merged PRs across repos with checks
+  rollup, review decisions, and diff stats. Detail view shows checks,
+  reviews, and comments; **"Review this PR"** creates a change-request
+  checkout workspace with an agent reviewing the PR.
+- **Actions** — recent workflow runs across repos, job/step breakdown,
+  inline log viewing (tail-capped for large logs), rerun failed jobs,
+  cancel running workflows.
+- **Board** — a separate sidebar surface: kanban over open issues with
+  columns from `status:*` labels (merged across repos when unfiltered).
+  Move cards between columns from the card menu — missing status labels are
+  created on the repo automatically. Agent workspaces started from issues
+  show up as live status chips on their cards.
 
 The UI is built with the host's own design tokens and matches Paseo's
 native look on desktop and mobile, in every theme.
@@ -60,15 +68,20 @@ paseo plugin reload paseo-plugin-github
 paseo plugin logs paseo-plugin-github
 ```
 
-| File                | Purpose                                              |
-| ------------------- | ---------------------------------------------------- |
-| `index.ts`          | Wiring: RPC handlers + surface/sidebar registration  |
-| `github.shared.ts`  | Zod RPC contracts and shared types                   |
-| `github.server.ts`  | Handlers: `gh` wrapper, TTL cache, error taxonomy    |
-| `main.client.tsx`   | Surface: project filter dropdown, tab bar, Overview  |
-| `issues.client.tsx` | Issues tab: list, detail, comments, agent workspaces |
-| `actions.client.tsx`| Actions tab: runs, jobs, logs, rerun/cancel          |
-| `scripts/gen-icons.mjs` | Regenerates `icons.client.tsx` (Lucide → PNG)    |
+| File                    | Purpose                                              |
+| ----------------------- | ---------------------------------------------------- |
+| `index.ts`              | Wiring: RPC handlers + surface/sidebar registration  |
+| `github.shared.ts`      | Zod RPC contracts and shared types                   |
+| `github.server.ts`      | Handlers: `gh` wrapper, TTL cache, error taxonomy    |
+| `main.client.tsx`       | GitHub surface: project filter, tab bar, Overview    |
+| `issues.client.tsx`     | Issues tab: list, detail, comments, agent workspaces |
+| `pulls.client.tsx`      | Pull Requests tab: list, detail, checks, reviews     |
+| `actions.client.tsx`    | Actions tab: runs, jobs, logs, rerun/cancel          |
+| `board.client.tsx`      | Board surface: label-mode kanban with move menu      |
+| `dropdown.client.tsx`   | Shared project filter dropdown                       |
+| `projects.client.tsx`   | Shared Paseo project enumeration hook                |
+| `theme.shared.ts`       | Theme token helpers (alpha-derived borders/fills)    |
+| `scripts/gen-icons.mjs` | Regenerates `icons.client.tsx` (Lucide → PNG)        |
 
 ## License
 
