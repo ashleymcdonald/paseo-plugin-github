@@ -5,6 +5,9 @@ import type {
   GhError,
   IssueDetail,
   IssueSummary,
+  PullChecks,
+  PullDetail,
+  PullSummary,
   RepoInfo,
   RunJob,
   WorkflowRun,
@@ -19,6 +22,8 @@ import type {
   issuesList,
   issuesSetState,
   projectSummary,
+  pullsGet,
+  pullsList,
   repoInfo,
 } from "./github.shared";
 
@@ -542,4 +547,163 @@ export async function cancelWorkflowRun({ repoDir, runId }: Input<typeof actions
   } catch (err) {
     return toGhError(err);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Pull request handlers
+// ---------------------------------------------------------------------------
+
+const PR_FIELDS =
+  "number,title,state,url,author,labels,assignees,comments,updatedAt,createdAt,isDraft,headRefName,baseRefName,additions,deletions,reviewDecision,statusCheckRollup";
+
+interface GhCheckRollupEntry {
+  __typename?: string;
+  name?: string;
+  context?: string;
+  status?: string;
+  conclusion?: string | null;
+  state?: string;
+}
+
+interface GhPrRow {
+  number: number;
+  title: string;
+  state: string;
+  url: string;
+  author: { login: string } | null;
+  isDraft: boolean;
+  labels: { name: string; color: string }[];
+  assignees: { login: string }[];
+  comments: { author: { login: string } | null; body: string; createdAt: string }[];
+  updatedAt: string;
+  createdAt: string;
+  headRefName: string;
+  baseRefName: string;
+  additions: number;
+  deletions: number;
+  reviewDecision: string;
+  statusCheckRollup: GhCheckRollupEntry[] | null;
+}
+
+interface GhPrDetail extends GhPrRow {
+  body: string;
+  mergeable: string | null;
+  reviews: {
+    author: { login: string } | null;
+    state: string;
+    body: string;
+    submittedAt: string | null;
+  }[];
+}
+
+function summarizeChecks(rollup: GhCheckRollupEntry[] | null): PullChecks {
+  const checks: PullChecks = { total: 0, success: 0, failure: 0, pending: 0 };
+  for (const entry of rollup ?? []) {
+    checks.total += 1;
+    // CheckRun: status + conclusion. StatusContext: state.
+    const state = (entry.state ?? "").toUpperCase();
+    const status = (entry.status ?? "").toUpperCase();
+    const conclusion = (entry.conclusion ?? "").toUpperCase();
+    if (state === "PENDING" || state === "EXPECTED" || (status !== "" && status !== "COMPLETED")) {
+      checks.pending += 1;
+    } else if (
+      conclusion === "FAILURE" || conclusion === "TIMED_OUT" || conclusion === "CANCELLED" ||
+      conclusion === "ACTION_REQUIRED" || conclusion === "STARTUP_FAILURE" ||
+      state === "FAILURE" || state === "ERROR"
+    ) {
+      checks.failure += 1;
+    } else if (conclusion === "SUCCESS" || conclusion === "NEUTRAL" || conclusion === "SKIPPED" || state === "SUCCESS") {
+      checks.success += 1;
+    } else {
+      checks.pending += 1;
+    }
+  }
+  return checks;
+}
+
+function toCheckRuns(rollup: GhCheckRollupEntry[] | null): PullDetail["checkRuns"] {
+  return (rollup ?? []).map((entry) => ({
+    name: entry.name ?? entry.context ?? "check",
+    status: (entry.status ?? entry.state ?? "").toLowerCase(),
+    conclusion: (entry.conclusion ?? entry.state ?? null)?.toLowerCase() ?? null,
+  }));
+}
+
+function toPullSummary(row: GhPrRow): PullSummary {
+  const state = row.state.toLowerCase();
+  return {
+    number: row.number,
+    title: row.title,
+    state: state === "merged" ? "merged" : state === "closed" ? "closed" : "open",
+    url: row.url,
+    author: row.author?.login ?? null,
+    isDraft: row.isDraft,
+    labels: row.labels.map((l) => ({ name: l.name, color: l.color })),
+    assignees: row.assignees.map((a) => a.login),
+    commentCount: row.comments.length,
+    updatedAt: row.updatedAt,
+    headRef: row.headRefName,
+    baseRef: row.baseRefName,
+    additions: row.additions,
+    deletions: row.deletions,
+    reviewDecision:
+      row.reviewDecision === "APPROVED"
+        ? "approved"
+        : row.reviewDecision === "CHANGES_REQUESTED"
+          ? "changes_requested"
+          : row.reviewDecision === "REVIEW_REQUIRED"
+            ? "review_required"
+            : null,
+    checks: summarizeChecks(row.statusCheckRollup),
+  };
+}
+
+export async function listPulls({ repoDir, state, search, limit }: Input<typeof pullsList>) {
+  const key = `pulls:${repoDir}:${state}:${search ?? ""}:${limit}`;
+  return cached(key, 30_000, async () => {
+    try {
+      const args = [
+        "pr", "list", "--state", state, "--json", PR_FIELDS, "--limit", String(limit),
+      ];
+      if (search) {
+        args.push("--search", search);
+      }
+      const rows = await ghJson<GhPrRow[]>(args, repoDir);
+      return { ok: true as const, pulls: rows.map(toPullSummary) };
+    } catch (err) {
+      return toGhError(err);
+    }
+  });
+}
+
+export async function getPull({ repoDir, number }: Input<typeof pullsGet>) {
+  return cached(`pull:${repoDir}:${number}`, 30_000, async () => {
+    try {
+      const row = await ghJson<GhPrDetail>(
+        ["pr", "view", String(number), "--json", `${PR_FIELDS},body,mergeable,reviews`],
+        repoDir,
+      );
+      const pull: PullDetail = {
+        ...toPullSummary(row),
+        body: row.body,
+        createdAt: row.createdAt,
+        mergeable: row.mergeable ?? null,
+        checkRuns: toCheckRuns(row.statusCheckRollup),
+        reviews: (row.reviews ?? []).map((r) => ({
+          author: r.author?.login ?? null,
+          state: r.state.toLowerCase(),
+          body: r.body,
+          submittedAt: r.submittedAt,
+        })),
+        comments: row.comments.map((c) => ({
+          author: c.author?.login ?? null,
+          body: c.body,
+          createdAt: c.createdAt,
+        })),
+      };
+      return { ok: true as const, pull };
+    } catch (err) {
+      return toGhError(err);
+    }
+  });
 }

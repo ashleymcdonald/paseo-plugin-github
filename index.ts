@@ -12,6 +12,8 @@ import {
   issuesList,
   issuesSetState,
   projectSummary,
+  pullsGet,
+  pullsList,
   repoInfo,
 } from "./github.shared";
 import {
@@ -21,9 +23,11 @@ import {
   getIssue,
   getJobLog,
   getProjectSummary,
+  getPull,
   getRepoInfo,
   getWorkflowRun,
   listIssues,
+  listPulls,
   listWorkflowRuns,
   rerunWorkflowRun,
   setIssueState,
@@ -42,6 +46,8 @@ export default function contribute(plugin: PluginContext) {
   plugin.handle(actionsGetJobLog, getJobLog);
   plugin.handle(actionsRerun, rerunWorkflowRun);
   plugin.handle(actionsCancel, cancelWorkflowRun);
+  plugin.handle(pullsList, listPulls);
+  plugin.handle(pullsGet, getPull);
 
   plugin.addSurface("main", MainSurface);
   plugin.addSidebarItem({

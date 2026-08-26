@@ -269,3 +269,90 @@ export const actionsCancel = defineRpc({
   }),
   output: z.union([z.object({ ok: z.literal(true) }), ghErrorSchema]),
 });
+
+// ---------------------------------------------------------------------------
+// github.pulls.list / github.pulls.get
+// ---------------------------------------------------------------------------
+
+export const pullChecksSchema = z.object({
+  total: z.number().int().nonnegative(),
+  success: z.number().int().nonnegative(),
+  failure: z.number().int().nonnegative(),
+  pending: z.number().int().nonnegative(),
+});
+export type PullChecks = z.infer<typeof pullChecksSchema>;
+
+export const reviewDecisionSchema = z.enum([
+  "approved",
+  "changes_requested",
+  "review_required",
+]);
+
+export const pullSummarySchema = z.object({
+  number: z.number().int(),
+  title: z.string(),
+  state: z.enum(["open", "closed", "merged"]),
+  url: z.string(),
+  author: z.string().nullable(),
+  isDraft: z.boolean(),
+  labels: z.array(issueLabelSchema),
+  assignees: z.array(z.string()),
+  commentCount: z.number().int().nonnegative(),
+  updatedAt: z.string(),
+  headRef: z.string(),
+  baseRef: z.string(),
+  additions: z.number().int().nonnegative(),
+  deletions: z.number().int().nonnegative(),
+  reviewDecision: reviewDecisionSchema.nullable(),
+  checks: pullChecksSchema,
+});
+export type PullSummary = z.infer<typeof pullSummarySchema>;
+
+export const pullCheckRunSchema = z.object({
+  name: z.string(),
+  status: z.string(),
+  conclusion: z.string().nullable(),
+});
+
+export const pullReviewSchema = z.object({
+  author: z.string().nullable(),
+  state: z.string(),
+  body: z.string(),
+  submittedAt: z.string().nullable(),
+});
+
+export const pullDetailSchema = pullSummarySchema.extend({
+  body: z.string(),
+  createdAt: z.string(),
+  mergeable: z.string().nullable(),
+  checkRuns: z.array(pullCheckRunSchema),
+  reviews: z.array(pullReviewSchema),
+  comments: z.array(issueCommentSchema),
+});
+export type PullDetail = z.infer<typeof pullDetailSchema>;
+
+export const pullsList = defineRpc({
+  name: "github.pulls.list",
+  input: z.object({
+    ...repoDirInput,
+    state: z.enum(["open", "closed", "merged", "all"]).default("open"),
+    search: z.string().optional(),
+    limit: z.number().int().min(1).max(200).default(50),
+  }),
+  output: z.union([
+    z.object({ ok: z.literal(true), pulls: z.array(pullSummarySchema) }),
+    ghErrorSchema,
+  ]),
+});
+
+export const pullsGet = defineRpc({
+  name: "github.pulls.get",
+  input: z.object({
+    ...repoDirInput,
+    number: z.number().int().positive(),
+  }),
+  output: z.union([
+    z.object({ ok: z.literal(true), pull: pullDetailSchema }),
+    ghErrorSchema,
+  ]),
+});

@@ -13,6 +13,7 @@ import { projectSummary } from "./github.shared";
 import { ActionsTab } from "./actions.client";
 import { Icon } from "./icons.client";
 import { IssuesTab } from "./issues.client";
+import { PullsTab } from "./pulls.client";
 import { withAlpha } from "./theme.shared";
 
 interface ProjectEntry {
@@ -427,6 +428,17 @@ export function MainSurface({ theme, host, layout }: PluginSurfaceProps) {
         />
       ) : tab === "Actions" ? (
         <ActionsTab
+          theme={theme}
+          host={host}
+          layout={layout}
+          projects={scopedProjects.map((p) => ({
+            projectId: p.projectId,
+            name: p.name,
+            rootPath: p.rootPath,
+          }))}
+        />
+      ) : tab === "Pull Requests" ? (
+        <PullsTab
           theme={theme}
           host={host}
           layout={layout}
