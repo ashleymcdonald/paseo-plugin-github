@@ -257,13 +257,17 @@ function RunDetail({
         borderWidth: 1,
         borderColor: border,
         backgroundColor: surface1,
-        padding: 10,
         maxHeight: 320,
       },
+      logBoxContent: { padding: 10 },
       logText: {
         color: theme.colors.foreground,
         fontSize: 11,
         fontFamily: "monospace",
+        // RNW uses CSS pre-wrap, which never breaks long unbroken tokens
+        // (URLs, SHAs) and lets the log blow out the whole layout width.
+        // wordBreak is passed through to CSS on web; native ignores it.
+        ...({ wordBreak: "break-all" } as object),
       },
       muted: { color: theme.colors.foregroundMuted },
       danger: { color: theme.colors.statusDanger },
@@ -428,22 +432,24 @@ function RunDetail({
                   </View>
                 ))}
                 {logOpen && (
-                  <View style={styles.logBox}>
-                    {logQuery.isPending && <Text style={styles.muted}>Loading log…</Text>}
-                    {logQuery.data && !logQuery.data.ok && (
-                      <Text style={styles.danger}>{logQuery.data.message}</Text>
-                    )}
-                    {logQuery.data?.ok && (
-                      <>
-                        {logQuery.data.truncated && (
-                          <Text style={styles.metaText}>
-                            Log truncated to the last 512 KiB.{"\n"}
-                          </Text>
-                        )}
-                        <Text style={styles.logText}>{logQuery.data.log}</Text>
-                      </>
-                    )}
-                  </View>
+                  <ScrollView style={styles.logBox} nestedScrollEnabled>
+                    <View style={styles.logBoxContent}>
+                      {logQuery.isPending && <Text style={styles.muted}>Loading log…</Text>}
+                      {logQuery.data && !logQuery.data.ok && (
+                        <Text style={styles.danger}>{logQuery.data.message}</Text>
+                      )}
+                      {logQuery.data?.ok && (
+                        <>
+                          {logQuery.data.truncated && (
+                            <Text style={styles.metaText}>
+                              Log truncated to the last 512 KiB.{"\n"}
+                            </Text>
+                          )}
+                          <Text style={styles.logText}>{logQuery.data.log}</Text>
+                        </>
+                      )}
+                    </View>
+                  </ScrollView>
                 )}
               </View>
             );
