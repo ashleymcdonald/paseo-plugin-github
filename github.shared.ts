@@ -356,3 +356,45 @@ export const pullsGet = defineRpc({
     ghErrorSchema,
   ]),
 });
+
+// ---------------------------------------------------------------------------
+// github.board.*  (label-mode columns: status:* labels)
+// ---------------------------------------------------------------------------
+
+export const boardColumnSchema = z.object({
+  /** The status label backing this column; null = "no status" inbox column. */
+  label: z.string().nullable(),
+  /** Display title (label minus the "status:" prefix, or "No status"). */
+  title: z.string(),
+  color: z.string().nullable(),
+});
+export type BoardColumn = z.infer<typeof boardColumnSchema>;
+
+export const boardGet = defineRpc({
+  name: "github.board.get",
+  input: z.object({
+    ...repoDirInput,
+    limit: z.number().int().min(1).max(300).default(200),
+  }),
+  output: z.union([
+    z.object({
+      ok: z.literal(true),
+      columns: z.array(boardColumnSchema),
+      issues: z.array(issueSummarySchema),
+    }),
+    ghErrorSchema,
+  ]),
+});
+
+export const boardMove = defineRpc({
+  name: "github.board.move",
+  input: z.object({
+    ...repoDirInput,
+    number: z.number().int().positive(),
+    /** Status label to add; null when moving into the "no status" column. */
+    addLabel: z.string().nullable(),
+    /** Status label to remove; null when the issue had no status label. */
+    removeLabel: z.string().nullable(),
+  }),
+  output: z.union([z.object({ ok: z.literal(true) }), ghErrorSchema]),
+});

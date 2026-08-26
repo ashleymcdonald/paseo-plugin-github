@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { z } from "zod";
 import type {
+  BoardColumn,
   GhError,
   IssueDetail,
   IssueSummary,
@@ -16,6 +17,8 @@ import type {
   actionsGetRun,
   actionsListRuns,
   actionsRerun,
+  boardGet,
+  boardMove,
   issuesComment,
   issuesCreate,
   issuesGet,
@@ -80,7 +83,7 @@ function classify(err: unknown): GhFailure {
     stderr.includes("not a git repository") ||
     stderr.includes("no git remote") ||
     stderr.includes("could not resolve to a repository") ||
-    stderr.includes("not found")
+    (stderr.includes("repository") && stderr.includes("not found"))
   ) {
     return {
       code: "not_a_repo",
@@ -706,4 +709,116 @@ export async function getPull({ repoDir, number }: Input<typeof pullsGet>) {
       return toGhError(err);
     }
   });
+}
+
+// ---------------------------------------------------------------------------
+// Board handlers (label-mode: columns from status:* labels)
+// ---------------------------------------------------------------------------
+
+const STATUS_PREFIX = "status:";
+
+// Natural board order for common workflow states; unknown labels sort after,
+// alphabetically.
+const COLUMN_RANK: Record<string, number> = {
+  backlog: 0,
+  todo: 1,
+  pending: 2,
+  "in progress": 3,
+  "in review": 4,
+  review: 5,
+  done: 6,
+};
+
+interface GhLabelRow {
+  name: string;
+  color: string;
+}
+
+export async function getBoard({ repoDir, limit }: Input<typeof boardGet>) {
+  return cached(`board:${repoDir}:${limit}`, 30_000, async () => {
+    try {
+      const [labels, rows] = await Promise.all([
+        ghJson<GhLabelRow[]>(["label", "list", "--json", "name,color", "--limit", "200"], repoDir),
+        ghJson<GhIssueRow[]>(
+          ["issue", "list", "--state", "open", "--json", ISSUE_FIELDS, "--limit", String(limit)],
+          repoDir,
+        ),
+      ]);
+      const issues = rows.map(toIssueSummary);
+      // Columns cover every status label on the repo plus any in use on open
+      // issues (labels can exist on issues without being in the label list
+      // after renames).
+      const seen = new Map<string, string>(); // label name -> color
+      for (const label of labels) {
+        if (label.name.toLowerCase().startsWith(STATUS_PREFIX)) {
+          seen.set(label.name, label.color);
+        }
+      }
+      for (const issue of issues) {
+        for (const label of issue.labels) {
+          if (label.name.toLowerCase().startsWith(STATUS_PREFIX) && !seen.has(label.name)) {
+            seen.set(label.name, label.color);
+          }
+        }
+      }
+      const rank = (label: string): number =>
+        COLUMN_RANK[label.slice(STATUS_PREFIX.length).trim().toLowerCase()] ?? 100;
+      const columns: BoardColumn[] = [...seen.entries()]
+        .map(([label, color]): BoardColumn => ({
+          label,
+          title: label.slice(STATUS_PREFIX.length).trim() || label,
+          color,
+        }))
+        .sort((a, b) => {
+          const byRank = rank(a.label as string) - rank(b.label as string);
+          return byRank !== 0 ? byRank : a.title.localeCompare(b.title);
+        });
+      const hasNoStatus = issues.some(
+        (issue) => !issue.labels.some((l) => l.name.toLowerCase().startsWith(STATUS_PREFIX)),
+      );
+      if (hasNoStatus || columns.length === 0) {
+        columns.unshift({ label: null, title: "No status", color: null });
+      }
+      return { ok: true as const, columns, issues };
+    } catch (err) {
+      return toGhError(err);
+    }
+  });
+}
+
+export async function moveBoardCard({
+  repoDir,
+  number,
+  addLabel,
+  removeLabel,
+}: Input<typeof boardMove>) {
+  try {
+    const args = ["issue", "edit", String(number)];
+    if (addLabel) {
+      args.push("--add-label", addLabel);
+    }
+    if (removeLabel) {
+      args.push("--remove-label", removeLabel);
+    }
+    if (!addLabel && !removeLabel) {
+      return { ok: true as const };
+    }
+    try {
+      await gh(args, repoDir);
+    } catch (err) {
+      // Moving to a column whose label doesn't exist on this repo yet:
+      // create it and retry once.
+      const message = err instanceof GhCommandError ? err.failure.message.toLowerCase() : "";
+      if (addLabel && message.includes("not found") && message.includes(addLabel.toLowerCase())) {
+        await gh(["label", "create", addLabel, "--color", "8b949e"], repoDir);
+        await gh(args, repoDir);
+      } else {
+        throw err;
+      }
+    }
+    invalidateRepo(repoDir);
+    return { ok: true as const };
+  } catch (err) {
+    return toGhError(err);
+  }
 }

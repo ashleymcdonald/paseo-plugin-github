@@ -1,5 +1,5 @@
-import { type PluginSurfaceProps, usePaseo, useRpc } from "@getpaseo/plugin";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { type PluginSurfaceProps, useRpc } from "@getpaseo/plugin";
+import { useQueries } from "@tanstack/react-query";
 import React, { useMemo, useState } from "react";
 import {
   Pressable,
@@ -11,24 +11,18 @@ import {
 } from "react-native";
 import { projectSummary } from "./github.shared";
 import { ActionsTab } from "./actions.client";
+import { ProjectFilterDropdown } from "./dropdown.client";
 import { Icon } from "./icons.client";
 import { IssuesTab } from "./issues.client";
+import { usePaseoProjects } from "./projects.client";
 import { PullsTab } from "./pulls.client";
 import { withAlpha } from "./theme.shared";
-
-interface ProjectEntry {
-  projectId: string;
-  name: string;
-  rootPath: string;
-  workspaceCount: number;
-}
 
 type SurfaceStyles = Record<string, ViewStyle | TextStyle>;
 
 const TABS = [
   { id: "Overview", icon: "overview" },
   { id: "Issues", icon: "issues" },
-  { id: "Board", icon: "board" },
   { id: "Pull Requests", icon: "pulls" },
   { id: "Actions", icon: "actions" },
 ] as const;
@@ -50,10 +44,8 @@ function summaryDetail(code: string): string {
 }
 
 export function MainSurface({ theme, host, layout }: PluginSurfaceProps) {
-  const paseo = usePaseo();
   const getSummary = useRpc(projectSummary);
   const [filter, setFilter] = useState<string | null>(null); // projectId, null = all
-  const [menuOpen, setMenuOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("Overview");
 
   const styles = useMemo<SurfaceStyles>(
@@ -74,50 +66,6 @@ export function MainSurface({ theme, host, layout }: PluginSurfaceProps) {
           borderBottomColor: border,
           zIndex: 10,
         },
-        // host-filter.tsx: gap 6, 6v/12h padding, radius 6, surface1 bg, 1px border
-        dropdownButton: {
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 6,
-          height: 28,
-          paddingHorizontal: 12,
-          borderRadius: 6,
-          borderWidth: 1,
-          borderColor: border,
-          backgroundColor: surface1,
-        },
-        dot: { width: 8, height: 8, borderRadius: 4 },
-        dropdownButtonText: { color: theme.colors.foreground, fontSize: 14, fontWeight: "500" },
-        dropdownCaret: { color: theme.colors.foregroundMuted, fontSize: 10 },
-        // combobox.tsx: surface0, radius 8, 1px border, no dividers,
-        // items minHeight 36, 12h/8v padding, gap 8, check 16px muted
-        menu: {
-          position: "absolute",
-          top: "100%",
-          left: 0,
-          marginTop: 5,
-          minWidth: 220,
-          maxWidth: 400,
-          maxHeight: 400,
-          borderRadius: 8,
-          borderWidth: 1,
-          borderColor: border,
-          backgroundColor: theme.colors.surface0,
-          paddingVertical: 4,
-          zIndex: 20,
-        },
-        menuItem: {
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 8,
-          minHeight: 36,
-          paddingVertical: 8,
-          paddingHorizontal: 12,
-        },
-        menuItemHover: { backgroundColor: surface1 },
-        menuItemText: { color: theme.colors.foreground, fontSize: 14, flex: 1 },
-        menuItemDetail: { color: theme.colors.foregroundMuted, fontSize: 12 },
-        check: { color: theme.colors.foregroundMuted, fontSize: 14 },
         // tabs: 28px chips, 8h padding, radius 6, gap 4,
         // active = surface2 fill (no border), muted → foreground label
         tabBar: { flexDirection: "row", gap: 4, flexShrink: 1 },
@@ -182,34 +130,12 @@ export function MainSurface({ theme, host, layout }: PluginSurfaceProps) {
         cellDetail: { color: theme.colors.foregroundMuted, fontSize: 12 },
         muted: { color: theme.colors.foregroundMuted },
         danger: { color: theme.colors.statusDanger },
-        placeholder: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
       };
     },
     [theme, layout.compact],
   );
 
-  const projectsQuery = useQuery({
-    queryKey: ["github-plugin.projects"],
-    queryFn: async (): Promise<ProjectEntry[]> => {
-      const result = await paseo.workspaces.list();
-      const byProject = new Map<string, ProjectEntry>();
-      for (const ws of result.entries) {
-        const existing = byProject.get(ws.projectId);
-        if (existing) {
-          existing.workspaceCount += 1;
-        } else {
-          byProject.set(ws.projectId, {
-            projectId: ws.projectId,
-            name: ws.projectCustomName ?? ws.projectDisplayName,
-            rootPath: ws.projectRootPath,
-            workspaceCount: 1,
-          });
-        }
-      }
-      return [...byProject.values()].sort((a, b) => a.name.localeCompare(b.name));
-    },
-    staleTime: 60_000,
-  });
+  const projectsQuery = usePaseoProjects();
 
   const projects = projectsQuery.data ?? [];
   const selectedProject = projects.find((p) => p.projectId === filter) ?? null;
@@ -238,82 +164,17 @@ export function MainSurface({ theme, host, layout }: PluginSurfaceProps) {
     }
   }
 
-  const filterLabel = selectedProject ? selectedProject.name : "All projects";
-
   return (
     <View style={styles.screen}>
       <View style={styles.topBar}>
-        <View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Project filter: ${filterLabel}`}
-            onPress={() => setMenuOpen((v) => !v)}
-            style={(state) => { const { pressed, hovered } = state as { pressed: boolean; hovered?: boolean }; return [
-              styles.dropdownButton,
-              (pressed || hovered) && { backgroundColor: withAlpha(theme.colors.foreground, 0.07) },
-            ]; }}
-          >
-            <View
-              style={[
-                styles.dot,
-                { backgroundColor: selectedProject ? theme.colors.accent : theme.colors.foregroundMuted },
-              ]}
-            />
-            <Text style={styles.dropdownButtonText}>{filterLabel}</Text>
-            <Text style={styles.dropdownCaret}>{menuOpen ? "▴" : "▾"}</Text>
-          </Pressable>
-          {menuOpen && (
-            <View style={styles.menu}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  setFilter(null);
-                  setMenuOpen(false);
-                }}
-                style={(state) => { const { pressed, hovered } = state as { pressed: boolean; hovered?: boolean }; return [
-                  styles.menuItem,
-                  (pressed || hovered) && styles.menuItemHover,
-                ]; }}
-              >
-                <View style={[styles.dot, { backgroundColor: theme.colors.foregroundMuted }]} />
-                <Text style={styles.menuItemText}>All projects</Text>
-                {!selectedProject && <Text style={styles.check}>✓</Text>}
-              </Pressable>
-              {projects.map((p) => (
-                <Pressable
-                  key={p.projectId}
-                  accessibilityRole="button"
-                  onPress={() => {
-                    setFilter(p.projectId);
-                    setMenuOpen(false);
-                  }}
-                  style={(state) => { const { pressed, hovered } = state as { pressed: boolean; hovered?: boolean }; return [
-                    styles.menuItem,
-                    (pressed || hovered) && styles.menuItemHover,
-                  ]; }}
-                >
-                  <View
-                    style={[
-                      styles.dot,
-                      {
-                        backgroundColor:
-                          selectedProject?.projectId === p.projectId
-                            ? theme.colors.accent
-                            : theme.colors.foregroundMuted,
-                      },
-                    ]}
-                  />
-                  <Text style={styles.menuItemText}>{p.name}</Text>
-                  {selectedProject?.projectId === p.projectId ? (
-                    <Text style={styles.check}>✓</Text>
-                  ) : (
-                    <Text style={styles.menuItemDetail}>{p.workspaceCount} ws</Text>
-                  )}
-                </Pressable>
-              ))}
-            </View>
-          )}
-        </View>
+        <ProjectFilterDropdown
+          theme={theme}
+          host={host}
+          layout={layout}
+          projects={projects}
+          selectedId={selectedProject?.projectId ?? null}
+          onSelect={setFilter}
+        />
         <View style={styles.tabBar}>
           {TABS.map((t) => {
             const active = tab === t.id;
@@ -448,15 +309,7 @@ export function MainSurface({ theme, host, layout }: PluginSurfaceProps) {
             rootPath: p.rootPath,
           }))}
         />
-      ) : (
-        <View style={styles.placeholder}>
-          <Text style={styles.muted}>
-            {tab} · {filterLabel}
-            {selectedProject ? ` (${selectedProject.rootPath})` : " (aggregated across repos)"}{" "}
-            — arrives in a later phase
-          </Text>
-        </View>
-      )}
+      ) : null}
     </View>
   );
 }

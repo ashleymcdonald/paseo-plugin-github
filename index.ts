@@ -1,4 +1,5 @@
 import type { PluginContext } from "@getpaseo/plugin";
+import { BoardSurface } from "./board.client";
 import { MainSurface } from "./main.client";
 import {
   actionsCancel,
@@ -6,6 +7,8 @@ import {
   actionsGetRun,
   actionsListRuns,
   actionsRerun,
+  boardGet,
+  boardMove,
   issuesComment,
   issuesCreate,
   issuesGet,
@@ -20,6 +23,7 @@ import {
   cancelWorkflowRun,
   commentOnIssue,
   createIssue,
+  getBoard,
   getIssue,
   getJobLog,
   getProjectSummary,
@@ -29,6 +33,7 @@ import {
   listIssues,
   listPulls,
   listWorkflowRuns,
+  moveBoardCard,
   rerunWorkflowRun,
   setIssueState,
 } from "./github.server";
@@ -48,6 +53,8 @@ export default function contribute(plugin: PluginContext) {
   plugin.handle(actionsCancel, cancelWorkflowRun);
   plugin.handle(pullsList, listPulls);
   plugin.handle(pullsGet, getPull);
+  plugin.handle(boardGet, getBoard);
+  plugin.handle(boardMove, moveBoardCard);
 
   plugin.addSurface("main", MainSurface);
   plugin.addSidebarItem({
@@ -55,6 +62,13 @@ export default function contribute(plugin: PluginContext) {
     title: "GitHub",
     icon: "Github",
     surface: "main",
+  });
+  plugin.addSurface("board", BoardSurface);
+  plugin.addSidebarItem({
+    id: "board",
+    title: "Board",
+    icon: "SquareKanban",
+    surface: "board",
   });
   return () => {};
 }
