@@ -267,6 +267,15 @@ function RunDetail({
         // wordBreak is passed through to CSS on web; native ignores it.
         ...({ wordBreak: "break-all" } as object),
       },
+      logLineError: {
+        backgroundColor: withAlpha(theme.colors.statusDanger, 0.15),
+        color: theme.colors.statusDanger,
+      },
+      logLineWarn: {
+        // No warning token in the plugin theme; standard amber.
+        backgroundColor: withAlpha("#e8a33d", 0.12),
+        color: "#e8a33d",
+      },
       muted: { color: theme.colors.foregroundMuted },
       danger: { color: theme.colors.statusDanger },
     };
@@ -442,7 +451,23 @@ function RunDetail({
                             Log truncated to the last 512 KiB.{"\n"}
                           </Text>
                         )}
-                        <Text style={styles.logText}>{logQuery.data.log}</Text>
+                        {logQuery.data.log.split("\n").map((line, i) => (
+                          <Text
+                            key={i}
+                            style={[
+                              styles.logText,
+                              // \berror avoids matching stderr; warn/warning both hit.
+                              /\berror/i.test(line)
+                                ? styles.logLineError
+                                : /\bwarn(ing)?\b/i.test(line)
+                                  ? styles.logLineWarn
+                                  : undefined,
+                            ]}
+                          >
+                            {line}
+                            {"\n"}
+                          </Text>
+                        ))}
                       </>
                     )}
                   </View>
